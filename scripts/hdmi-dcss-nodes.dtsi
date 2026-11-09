@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: (GPL-2.0+ OR MIT) */
+/* i.MX8MQ display pipeline missing from Microsoft's pe100.dtb: DCSS display controller -> Cadence HDMI TX.
+   Values come from NXP linux-imx tag imx_5.4.3_2.0.0 (imx8mq.dtsi, imx8mq-evk.dts) with clock macros
+   resolved from imx8mq-clock.h. Inserted by build-hdmi-dtb.sh before interrupt-controller@32e2d000. */
+			hdmi@32c00000 {
+				compatible = "cdn,imx8mq-hdmi";
+				reg = <0x32c00000 0x100000 0x32e40000 0x40000>;
+				interrupts = <0x00 0x10 0x04 0x00 0x19 0x04>;
+				interrupt-names = "plug_in\0plug_out";
+				lane-mapping = <0xe4>;
+				status = "okay";
+
+				port@1 {
+					hdmi_in: endpoint {
+						remote-endpoint = <&dcss_out>;
+					};
+				};
+			};
+
+			display-controller@32e00000 {
+				#address-cells = <0x01>;
+				#size-cells = <0x00>;
+				compatible = "nxp,imx8mq-dcss";
+				reg = <0x32e00000 0x2d000 0x32e2f000 0x1000>;
+				interrupts = <0x06 0x08 0x09 0x10 0x11>;
+				interrupt-names = "ctx_ld\0ctxld_kick\0vblank\0dtrc_ch1\0dtrc_ch2";
+				interrupt-parent = <0x44>;
+				clocks = <0x02 248 0x02 247 0x02 249 0x02 254 0x02 122 0x02 266 0x02 267>;
+				clock-names = "apb\0axi\0rtrm\0pix\0dtrc\0pll_src\0pll_phy_ref";
+				assigned-clocks = <0x02 107 0x02 109 0x02 266>;
+				assigned-clock-parents = <0x02 78 0x02 78 0x02 3>;
+				assigned-clock-rates = <800000000 400000000>;
+				status = "okay";
+
+				port@0 {
+					dcss_out: endpoint {
+						remote-endpoint = <&hdmi_in>;
+					};
+				};
+			};

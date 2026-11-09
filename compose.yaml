@@ -1,0 +1,245 @@
+# The Percept DK's containers. `./percept-kit.sh deploy` builds, pulls and starts them; on the device,
+# `docker compose` in ~/percept-kit works too. Settings: config/percept.env on your PC (see
+# config.example/percept.env). The device's .env and .env.d/ are written by deploy: don't edit them.
+# Image versions are pinned here and nowhere else.
+name: percept
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: 5m
+    max-file: "3"
+
+# Each module gets its own settings from config/percept.env (EYE_*, EAR_*, MOUTH_*, VOICE_*): deploy
+# writes them to .env.d/<module>.env, so changing one recreates only that module.
+
+# One broker and one topic for the Eye and the voice sample: the device's own (mosquitto) unless
+# MQTT_URL names another.
+x-mqtt-url: &mqtt_url ${MQTT_URL:-mqtt://mosquitto:1883}
+x-eye-topic: &eye_topic ${MQTT_EYE_TOPIC:-percept/eye/inferences}
+
+services:
+  # ---------------------------------------------------------------- modules (built on the device)
+  eye:
+    image: percept/eye:latest
+    build:
+      context: modules/eye
+      labels:
+        org.percept-kit.source: ${PK_SOURCE:-}
+    container_name: eye
+    restart: unless-stopped
+    env_file: [{path: .env.d/eye.env, required: false}]
+    environment:
+      EYE_HTTP_PORT: "8555"
+      EYE_MQTT_URL: *mqtt_url
+      EYE_MQTT_TOPIC: *eye_topic
+      EYE_MQTT_USERNAME: ${MQTT_USERNAME:-}
+      EYE_MQTT_PASSWORD_FILE: ${MQTT_PASSWORD_FILE:-}
+      EYE_MQTT_CA_FILE: ${MQTT_CA_FILE:-}
+      EYE_MQTT_CERT_FILE: ${MQTT_CERT_FILE:-}
+      EYE_MQTT_KEY_FILE: ${MQTT_KEY_FILE:-}
+      EYE_MQTT_INSECURE: ${MQTT_INSECURE:-0}
+    ports: ["8554:8554", "8555:8555"]
+    # The Myriad X re-enumerates on USB when its firmware boots, so the whole bus is mounted.
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ./config/files:/config/files:ro
+    device_cgroup_rules: ["c 189:* rmw"]
+    logging: *logging
+
+  ear:
+    image: percept/ear:latest
+    build:
+      context: modules/ear
+      labels:
+        org.percept-kit.source: ${PK_SOURCE:-}
+    container_name: ear
+    restart: unless-stopped
+    env_file: [{path: .env.d/ear.env, required: false}]
+    ports: ["8000:8000"]
+    devices: ["/dev/snd"]
+    group_add: ["${PK_AUDIO_GID}", "${PK_INPUT_GID}"]
+    # The buttons' input device changes number when the SoM re-enumerates, so /dev/input is mounted.
+    volumes: ["/dev/input:/dev/input:ro"]
+    device_cgroup_rules: ["c 13:* r"]
+    logging: *logging
+
+  mouth:
+    image: percept/mouth:latest
+    build:
+      context: modules/mouth
+      args: [PIP_INDEX_URL]
+      labels:
+        org.percept-kit.source: ${PK_SOURCE:-}
+    container_name: mouth
+    restart: unless-stopped
+    env_file: [{path: .env.d/mouth.env, required: false}]
+    ports: ["8001:8001"]
+    devices: ["/dev/snd"]
+    group_add: ["${PK_AUDIO_GID}"]
+    volumes:
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      - mouth-cache:/cache
+    logging: *logging
+
+  # ---------------------------------------------------------------- MQTT broker and the voice sample
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    container_name: mosquitto
+    profiles: [local-mqtt]
+    restart: unless-stopped
+    volumes: ["./services/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro"]
+    logging: *logging
+
+  voice:
+    image: percept/sample-voice:latest
+    build:
+      context: samples/voice
+      args: [PIP_INDEX_URL]
+      labels:
+        org.percept-kit.source: ${PK_SOURCE:-}
+    container_name: voice
+    restart: unless-stopped
+    env_file: [{path: .env.d/voice.env, required: false}]
+    environment:
+      VOICE_MQTT_URL: *mqtt_url
+      VOICE_EYE_TOPIC: *eye_topic
+      VOICE_TOPIC_PREFIX: ${MQTT_VOICE_PREFIX:-percept/voice}
+      VOICE_MQTT_USERNAME: ${MQTT_USERNAME:-}
+      VOICE_MQTT_PASSWORD_FILE: ${MQTT_PASSWORD_FILE:-}
+      VOICE_MQTT_CA_FILE: ${MQTT_CA_FILE:-}
+      VOICE_MQTT_CERT_FILE: ${MQTT_CERT_FILE:-}
+      VOICE_MQTT_KEY_FILE: ${MQTT_KEY_FILE:-}
+      VOICE_MQTT_INSECURE: ${MQTT_INSECURE:-0}
+    # Group 5000 can read config/files (the Eye's group too).
+    group_add: ["5000"]
+    ports: ["8080:8080"]
+    volumes:
+      - voice-data:/data
+      - ./config/files:/config/files:ro
+    logging: *logging
+
+  # ---------------------------------------------------------------- dashboard
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v2.7.0
+    container_name: homepage
+    restart: unless-stopped
+    ports: ["80:3000"]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      LOG_TARGETS: stdout
+      HOMEPAGE_ALLOWED_HOSTS: ${PK_ALLOWED_HOSTS}
+      HOMEPAGE_VAR_HOST: ${PK_HOST}
+    volumes: ["./services/dashboard/homepage:/app/config:ro"]
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    container_name: grafana
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      # No sign-in anywhere: every visitor is an organisation Admin, and the built-in login, its form
+      # and basic auth are off. No admin account is created on a new install.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN: "true"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/percept-dk.json
+      # No calls home, and no plugins downloaded at start-up.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # A soft cap on Grafana's Go heap: the board has no swap.
+      GOMEMLIMIT: 256MiB
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./services/dashboard/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./services/dashboard/grafana/dashboards:/etc/grafana/dashboards:ro
+    logging: *logging
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-1GB}
+    volumes:
+      - ./services/dashboard/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    logging: *logging
+
+  # The host's network and process namespace, so it reports the board's own interfaces and processes.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --path.udev.data=/host/run/udev/data
+      - --web.listen-address=:9100
+    volumes: ["/:/host:ro,rslave"]
+    logging: *logging
+
+  # cAdvisor's documented mounts. Only Docker containers, every 15 s, without per-container disk usage.
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices: ["/dev/kmsg"]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --store_container_labels=false
+      - --enable_metrics=cpu,memory,network,diskIO,oom_event
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    logging: *logging
+
+  go2rtc:
+    image: alexxit/go2rtc:1.9.15
+    container_name: go2rtc
+    restart: unless-stopped
+    ports: ["1984:1984", "8556:8556/tcp", "8556:8556/udp"]
+    environment:
+      PERCEPT_HOST: ${PK_HOST}
+    volumes: ["./services/dashboard/go2rtc:/config:ro"]
+    logging: *logging
+
+# Created by deploy and kept outside the project, so `docker compose down -v` can't delete them.
+networks:
+  default:
+    name: percept
+    external: true
+
+volumes:
+  mouth-cache:
+    name: mouth-cache
+    external: true
+  voice-data:
+    name: voice-data
+    external: true
+  prometheus-data:
+    name: prometheus-data
+    external: true
+  grafana-data:
+    name: grafana-data
+    external: true

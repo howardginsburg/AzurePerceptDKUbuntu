@@ -1,0 +1,6 @@
+[Unit]
+Description=Bind Azure Percept Ear SoM to snd-usb-audio
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'sleep 5; grep -q "Azure Ear SoM" /proc/asound/cards && exit 0; modprobe -r snd_usb_audio; modprobe snd_usb_audio; sleep 2; grep -q "Azure Ear SoM" /proc/asound/cards'

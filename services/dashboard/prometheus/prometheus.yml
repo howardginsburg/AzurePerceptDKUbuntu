@@ -1,0 +1,26 @@
+# Prometheus: every 15 s it scrapes the board (node_exporter), the containers (cAdvisor) and the Eye
+# (inferences, Myriad X temperature and memory). See compose.yaml.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - rules.yml
+
+scrape_configs:
+  - job_name: board
+    static_configs:
+      # node_exporter shares the host's network; host.docker.internal is the host (compose.yaml).
+      - targets: ["host.docker.internal:9100"]
+
+  - job_name: containers
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: eye
+    static_configs:
+      - targets: ["eye:8555"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

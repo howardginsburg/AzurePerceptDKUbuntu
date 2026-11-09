@@ -1,0 +1,5 @@
+---
+# percept-kit: https://gethomepage.dev/configs/info-widgets/
+- greeting:
+    text_size: xl
+    text: Azure Percept DK

@@ -1,0 +1,26 @@
+---
+# percept-kit: https://gethomepage.dev/configs/settings/
+title: Percept DK
+description: Azure Percept DK on Ubuntu (percept-kit)
+theme: dark
+color: slate
+headerStyle: boxed
+statusStyle: dot
+useEqualHeights: true
+hideVersion: true
+disableUpdateCheck: true
+disableIndexing: true
+
+layout:
+  Device:
+    style: row
+    columns: 4
+  Video:
+    style: row
+    columns: 4
+  Modules:
+    style: row
+    columns: 4
+  Monitoring:
+    style: row
+    columns: 3

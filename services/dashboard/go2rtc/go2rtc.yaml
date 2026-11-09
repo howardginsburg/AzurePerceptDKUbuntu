@@ -1,0 +1,26 @@
+# go2rtc: the Eye's RTSP streams in a browser, at http://<device>:1984/. The streams keep the Eye's own
+# names. go2rtc connects to the Eye only while someone watches. Mounted read-only (compose.yaml).
+streams:
+  result: rtsp://eye:8554/resultTCP   # annotated: boxes and labels drawn in, MJPEG 816x616
+  raw: rtsp://eye:8554/rawTCP         # camera without annotations, MJPEG 816x616
+  h264raw: rtsp://eye:8554/h264raw    # full sensor resolution from the Myriad X encoder, H.264 3264x2464
+
+api:
+  listen: ":1984"
+
+# The Eye already serves RTSP.
+rtsp:
+  listen: ""
+srtp:
+  listen: ""
+
+# Browsers get the MJPEG streams over the API's WebSocket. The 25 Mbit/s H.264 stream overflows the
+# player's MSE buffer, so it goes by WebRTC: port 8556 (the Eye has 8555), offered only at the address
+# the kit uses for the device (PERCEPT_HOST, set in compose.yaml). No public STUN servers.
+webrtc:
+  listen: ":8556"
+  candidates:
+    - ${PERCEPT_HOST}:8556
+  ice_servers: []
+  filters:
+    candidates: []

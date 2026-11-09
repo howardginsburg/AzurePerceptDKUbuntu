@@ -1,0 +1,33 @@
+set timeout=@TIMEOUT@
+set default=@DEFAULT@
+set root=(hd0,gpt3)
+set efiroot=(hd0,gpt1)
+
+# Managed by percept-kit (install-grub-cfg.sh). Original: grub.cfg.orig
+# One-shot boot: next_entry is honoured only if clearing it was persisted first,
+# so a failed trial boot + power-cycle always falls back to the default entry.
+set next_entry=
+load_env -f (hd0,gpt1)/boot/grub2/grubenv next_entry
+if [ -n "${next_entry}" ]; then
+    set requested_entry="${next_entry}"
+    set next_entry=
+    if save_env -f (hd0,gpt1)/boot/grub2/grubenv next_entry; then
+        set default="${requested_entry}"
+    fi
+fi
+
+menuentry "Mariner" {
+    linux /boot/vmlinuz root=/dev/mmcblk0p3 rw quiet loglevel=3 ima_policy=tcb
+    devicetree $efiroot/pe100.dtb
+}
+
+# pe100-hdmi.dtb = pe100.dtb plus the DCSS + HDMI display nodes Microsoft removed.
+menuentry "Ubuntu" {
+    linux /boot/vmlinuz root=PARTUUID=@UBUNTU_PARTUUID@ rootwait rw net.ifnames=0 systemd.unified_cgroup_hierarchy=0 panic=10 console=ttymxc0,115200 console=tty0
+    devicetree $efiroot/pe100-hdmi.dtb
+}
+
+menuentry "Ubuntu (original device tree, no HDMI)" {
+    linux /boot/vmlinuz root=PARTUUID=@UBUNTU_PARTUUID@ rootwait rw net.ifnames=0 systemd.unified_cgroup_hierarchy=0 panic=10 quiet loglevel=3
+    devicetree $efiroot/pe100.dtb
+}

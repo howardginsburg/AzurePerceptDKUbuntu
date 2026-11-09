@@ -1,0 +1,8 @@
+# Installed with --no-deps --require-hashes; the other vosk dependencies (cffi, requests, tqdm)
+# come from Ubuntu packages, websockets is only used by vosk's server client and isn't needed.
+# vosk 0.3.45, Apache-2.0 (https://github.com/alphacep/vosk-api)
+vosk==0.3.45 \
+    --hash=sha256:54efb47dd890e544e9e20f0316413acec7f8680d04ec095c6140ab4e70262704
+# srt 3.5.3, MIT (https://github.com/cdown/srt); vosk imports it at load time
+srt==3.5.3 \
+    --hash=sha256:4884315043a4f0740fd1f878ed6caa376ac06d70e135f306a6dc44632eed0cc0

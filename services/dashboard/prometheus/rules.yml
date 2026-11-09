@@ -1,0 +1,23 @@
+# Headline numbers, defined once here. The Grafana dashboard's top row and the Homepage widgets both show
+# these recorded series, so the two pages always agree.
+groups:
+  - name: device
+    rules:
+      - record: device:cpu_usage:ratio
+        expr: 1 - avg(rate(node_cpu_seconds_total{job="board",mode="idle"}[1m]))
+      - record: device:memory_usage:ratio
+        expr: 1 - node_memory_MemAvailable_bytes{job="board"} / node_memory_MemTotal_bytes{job="board"}
+      - record: device:rootfs_usage:ratio
+        expr: 1 - node_filesystem_avail_bytes{job="board",mountpoint="/"} / node_filesystem_size_bytes{job="board",mountpoint="/"}
+      - record: device:soc_temperature:celsius
+        expr: max(node_thermal_zone_temp{job="board"})
+      - record: device:uptime:seconds
+        expr: time() - max(node_boot_time_seconds{job="board"})
+      - record: device:containers_running:count
+        expr: count(container_start_time_seconds{job="containers",name!=""})
+      - record: device:myriadx_temperature:max_celsius
+        expr: max(percept_myriadx_temperature_celsius{job="eye"})
+      - record: device:eye_inferences:rate1m
+        expr: sum(rate(percept_eye_inferences_total{job="eye"}[1m]))
+      - record: device:eye_objects:sum
+        expr: sum(percept_eye_objects{job="eye"})

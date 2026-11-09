@@ -1,0 +1,3 @@
+# Azure Percept Ear SoM: snd-usb-audio misses the late re-enumeration of the
+# audio function; kick a oneshot that rebinds it if no card appeared.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="045e", ATTR{idProduct}=="0671", TAG+="systemd", ENV{SYSTEMD_WANTS}+="percept-ear-audio.service"

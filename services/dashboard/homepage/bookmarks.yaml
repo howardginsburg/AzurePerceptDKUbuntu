@@ -1,0 +1,34 @@
+---
+# percept-kit: raw endpoints. RTSP links open in a player registered for rtsp:// (VLC).
+- Eye API:
+    - Latest inference:
+        - abbr: JS
+          href: http://{{HOMEPAGE_VAR_HOST}}:8555/latest
+    - Inference events (SSE):
+        - abbr: SE
+          href: http://{{HOMEPAGE_VAR_HOST}}:8555/events
+    - Prometheus metrics:
+        - abbr: PM
+          href: http://{{HOMEPAGE_VAR_HOST}}:8555/metrics
+
+- RTSP:
+    - Annotated:
+        - abbr: RS
+          href: rtsp://{{HOMEPAGE_VAR_HOST}}:8554/result
+    - Raw:
+        - abbr: RW
+          href: rtsp://{{HOMEPAGE_VAR_HOST}}:8554/raw
+    - Full resolution (H.264):
+        - abbr: H2
+          href: rtsp://{{HOMEPAGE_VAR_HOST}}:8554/h264raw
+
+- Prometheus:
+    - Targets:
+        - abbr: TG
+          href: http://{{HOMEPAGE_VAR_HOST}}:9090/targets
+    - Recording rules:
+        - abbr: RR
+          href: http://{{HOMEPAGE_VAR_HOST}}:9090/rules
+    - Query:
+        - abbr: PQ
+          href: http://{{HOMEPAGE_VAR_HOST}}:9090/query

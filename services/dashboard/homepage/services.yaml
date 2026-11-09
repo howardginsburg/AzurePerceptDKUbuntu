@@ -1,0 +1,143 @@
+---
+# percept-kit: the device's web pages in one place. {{HOMEPAGE_VAR_HOST}} is the address your PC uses for
+# the device (set in compose.yaml from the kit's settings). Homepage itself fetches the widgets and status
+# dots, by container name on the Docker network "percept". The numbers come from Prometheus' recording
+# rules (services/dashboard/prometheus/rules.yml), the same series Grafana's top row shows.
+
+- Device:
+    - Board:
+        icon: mdi-chip
+        description: i.MX8MQ, 4× Cortex-A53, eMMC
+        href: http://{{HOMEPAGE_VAR_HOST}}:3000/d/percept-dk/percept-dk
+        widget:
+          type: prometheusmetric
+          url: http://prometheus:9090
+          refreshInterval: 15000
+          metrics:
+            - label: CPU
+              query: device:cpu_usage:ratio
+              format: { type: percent, scale: 100, options: { maximumFractionDigits: 0 } }
+            - label: Memory
+              query: device:memory_usage:ratio
+              format: { type: percent, scale: 100, options: { maximumFractionDigits: 0 } }
+            - label: Disk
+              query: device:rootfs_usage:ratio
+              format: { type: percent, scale: 100, options: { maximumFractionDigits: 0 } }
+            - label: SoC
+              query: device:soc_temperature:celsius
+              format: { type: number, suffix: " °C", options: { maximumFractionDigits: 0 } }
+
+    - Myriad X:
+        icon: mdi-eye-outline
+        description: Vision processor on the Eye SoM
+        href: http://{{HOMEPAGE_VAR_HOST}}:3000/d/percept-dk/percept-dk
+        widget:
+          type: prometheusmetric
+          url: http://prometheus:9090
+          refreshInterval: 15000
+          metrics:
+            - label: Temperature
+              query: device:myriadx_temperature:max_celsius
+              format: { type: number, suffix: " °C", options: { maximumFractionDigits: 0 } }
+            - label: Inferences
+              query: device:eye_inferences:rate1m
+              format: { type: number, suffix: "/s", options: { maximumFractionDigits: 1 } }
+            - label: Objects in view
+              query: device:eye_objects:sum
+              format: { type: number }
+
+    - Containers:
+        icon: mdi-docker
+        description: Docker on the device
+        href: http://{{HOMEPAGE_VAR_HOST}}:3000/d/percept-dk/percept-dk
+        widget:
+          type: prometheusmetric
+          url: http://prometheus:9090
+          refreshInterval: 15000
+          metrics:
+            - label: Running
+              query: device:containers_running:count
+              format: { type: number }
+            - label: Device up
+              query: device:uptime:seconds
+              format: { type: duration }
+
+    - Bluetooth speaker:
+        icon: mdi-bluetooth-audio
+        description: Pair a speaker, or see where sound plays
+        href: http://{{HOMEPAGE_VAR_HOST}}:8001/#bt
+        widget:
+          type: customapi
+          url: http://mouth:8001/status
+          refreshInterval: 10000
+          mappings:
+            - field: sink
+              label: Output
+              remap:
+                - value: bluetooth
+                  to: Bluetooth
+                - value: line-out
+                  to: Line-out
+                - any: true
+                  to: None
+            - field: name
+              label: Playing on
+
+- Video:
+    - Annotated:
+        icon: mdi-cctv
+        description: Detections drawn in · MJPEG 816×616
+        href: "http://{{HOMEPAGE_VAR_HOST}}:1984/stream.html?src=result&mode=mjpeg"
+    - Raw:
+        icon: mdi-camera-outline
+        description: Camera only · MJPEG 816×616
+        href: "http://{{HOMEPAGE_VAR_HOST}}:1984/stream.html?src=raw&mode=mjpeg"
+    - Full resolution:
+        icon: mdi-camera-iris
+        description: Sensor resolution · H.264 3264×2464 over WebRTC
+        href: "http://{{HOMEPAGE_VAR_HOST}}:1984/stream.html?src=h264raw&mode=webrtc"
+    - All three:
+        icon: mdi-view-grid-outline
+        description: Side by side
+        href: "http://{{HOMEPAGE_VAR_HOST}}:1984/stream.html?src=result&mode=mjpeg&src=raw&mode=mjpeg&src=h264raw&mode=webrtc"
+
+- Modules:
+    - Eye:
+        icon: mdi-eye
+        description: Inferences as JSON and events, and metrics
+        href: http://{{HOMEPAGE_VAR_HOST}}:8555/
+        siteMonitor: http://eye:8555/
+    - Ear:
+        icon: mdi-microphone
+        description: Microphone levels and live audio
+        href: http://{{HOMEPAGE_VAR_HOST}}:8000/
+        siteMonitor: http://ear:8000/levels
+    - Mouth:
+        icon: mdi-speaker
+        description: Speaker output and text-to-speech
+        href: http://{{HOMEPAGE_VAR_HOST}}:8001/
+        siteMonitor: http://mouth:8001/status
+    - Voice sample:
+        icon: mdi-account-voice
+        description: Ask the Percept what it sees
+        href: http://{{HOMEPAGE_VAR_HOST}}:8080/
+        siteMonitor: http://voice:8080/state
+
+- Monitoring:
+    - Grafana:
+        icon: grafana.svg
+        description: Board, containers and Myriad X dashboard
+        href: http://{{HOMEPAGE_VAR_HOST}}:3000/
+        siteMonitor: http://grafana:3000/api/health
+    - Prometheus:
+        icon: prometheus.svg
+        description: Metrics store and queries
+        href: http://{{HOMEPAGE_VAR_HOST}}:9090/
+        widget:
+          type: prometheus
+          url: http://prometheus:9090
+    - go2rtc:
+        icon: mdi-video-wireless-outline
+        description: Streams the Eye's RTSP to browsers
+        href: http://{{HOMEPAGE_VAR_HOST}}:1984/
+        siteMonitor: http://go2rtc:1984/api

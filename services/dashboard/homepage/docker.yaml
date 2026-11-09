@@ -1,0 +1,2 @@
+---
+# percept-kit: no Docker integration; status dots use siteMonitor and the numbers come from Prometheus.

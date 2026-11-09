@@ -1,0 +1,10 @@
+# Installed with --no-deps --require-hashes. Piper needs only these three at run time.
+# piper-tts 1.8.0, GPL-3.0-or-later (https://github.com/OHF-Voice/piper1-gpl); bundles espeak-ng
+piper-tts==1.8.0 \
+    --hash=sha256:3f60c1917de6d8e8033f395878ad3f88f6dfee88a8b05f98971a275f76a38484
+# onnxruntime 1.23.2, MIT (https://github.com/microsoft/onnxruntime); last release with cp310 aarch64
+onnxruntime==1.23.2 \
+    --hash=sha256:8f7d1fe034090a1e371b7f3ca9d3ccae2fabae8c1d8844fb7371d1ea38e8e8d2
+# numpy 2.2.6, BSD-3-Clause (onnxruntime needs >= 1.21.6; Ubuntu 22.04 has 1.21.5)
+numpy==2.2.6 \
+    --hash=sha256:efd28d4e9cd7d7a8d39074a4d44c63eda73401580c5c76acda2ce969e0a38e83

@@ -1,0 +1,18 @@
+# Never publish: device-specific, private, or not licensed for redistribution.
+# Backups hold full eMMC images, Wi-Fi password, SSH host keys and the password hash.
+backup/
+backups/
+reports/
+.percept-kit.conf
+# Your settings and the files they refer to (may hold broker credentials, keys and models).
+config/
+# Settings files anywhere may hold credentials; only the documented example is committed.
+*.env
+!config.example/percept.env
+# Microsoft's board device tree and files derived from it (no published licence).
+# The kit builds pe100-hdmi.dtb on each device from that device's own pe100.dtb.
+dtb/pe100.dtb
+dtb/pe100.dts
+dtb/pe100-hdmi.dts
+dtb/pe100-hdmi.dtb
+*.dtb
