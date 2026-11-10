@@ -123,7 +123,13 @@
         href: http://{{HOMEPAGE_VAR_HOST}}:8080/
         siteMonitor: http://voice:8080/state
 
-- Monitoring:
+- Tools:
+    # Device Settings runs on the host, not in Docker, so its dot is checked at the device's address.
+    - Settings:
+        icon: mdi-cog
+        description: Bluetooth, models, HDMI, voice, network and system
+        href: http://{{HOMEPAGE_VAR_HOST}}:8002/
+        siteMonitor: http://{{HOMEPAGE_VAR_HOST}}:8002/health
     - Grafana:
         icon: grafana.svg
         description: Board, containers and Myriad X dashboard

@@ -1,0 +1,13 @@
+[Unit]
+Description=Percept Device Settings (port 8002)
+After=network.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/percept-kit/settings.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/percept-kit/settings/server.py --project ${PK_PROJECT}
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

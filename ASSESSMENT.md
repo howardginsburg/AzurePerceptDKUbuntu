@@ -1,7 +1,8 @@
 # Azure Percept DK – Device Assessment
 
 The stock device as shipped, read over SSH: what's in it, and whether it can run Ubuntu. How
-percept-kit builds on this is in [README.md](README.md).
+percept-kit builds on this is in [ARCHITECTURE.md](ARCHITECTURE.md) and
+[PROVENANCE.md](PROVENANCE.md).
 
 ## Hardware
 

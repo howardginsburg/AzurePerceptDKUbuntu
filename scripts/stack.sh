@@ -13,12 +13,13 @@
 # The kit passes PK_HOST, the address your PC uses for the device.
 set -euo pipefail
 
-PROJECT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+PROJECT=${PK_PROJECT:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}
 INCOMING=$PROJECT/.incoming
 # What the kit uploads. Everything else in the project (.env, .env.d/, .deploy-baseline, scripts/)
 # belongs to the device.
-MANAGED="compose.yaml modules samples services config"
+MANAGED="compose.yaml modules samples services config config.example"
 LIB=/usr/local/lib/percept-kit
+GUARD=$PROJECT/scripts/kit/config_guard.py
 LABEL=org.percept-kit.source
 cd "$PROJECT"
 
@@ -109,9 +110,13 @@ for line in sys.stdin.read().splitlines():
 # Starts .incoming/ with hard links to the stack's files that the PC's list (stdin) says are unchanged,
 # and prints the paths the PC must send.
 stage() {
+  local manifest
+  manifest=$(cat)
+  python3 "$GUARD" offer "$PROJECT" <<< "$manifest"
   rm -rf "$INCOMING"
   install -d -m 700 "$INCOMING"
-  python3 -c "$STAGE_PY" "$PROJECT" "$INCOMING" "$MANAGED"
+  python3 -c "$STAGE_PY" "$PROJECT" "$INCOMING" "$MANAGED" <<< "$manifest"
+  python3 "$GUARD" snapshot "$PROJECT" "$INCOMING/.config-generation"
 }
 
 # Unpacks the PC's tar (stdin) into .incoming/. Files edited on Windows may have CRLF line ends: the
@@ -121,7 +126,7 @@ receive() {
   tar -C "$INCOMING" -xf - --no-same-owner
   find "$INCOMING" -type f -links 1 \( -name Dockerfile -o -name '*.sh' -o -name '*.py' -o -name '*.conf' \
     -o -name '*.txt' -o -name '*.env' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' -o -name '*.js' \
-    -o -name '*.css' \) -exec sed -i 's/\r$//' {} +
+    -o -name '*.css' -o -name '*.html' \) -exec sed -i 's/\r$//' {} +
 }
 
 # Checks that the upload's configuration loads, with its .env; prints what apply will build.
@@ -144,6 +149,10 @@ host_setup() {
   for p in docker-compose-v2 docker-buildx rsync; do
     dpkg -s "$p" > /dev/null 2>&1 || missing="$missing $p"
   done
+  while read -r p; do
+    [ -n "$p" ] || continue
+    dpkg -s "$p" > /dev/null 2>&1 || missing="$missing $p"
+  done < "$INCOMING/services/settings/packages.txt"
   if [ -n "$missing" ]; then
     log "Installing$missing"
     apt-get update -q > /dev/null
@@ -221,13 +230,16 @@ MODULES="eye ear mouth voice"
 write_env() {
   local dir=$1 host=${PK_HOST:-} profiles='' files=compose.yaml owner m
   owner=$(stat -c %U "$PROJECT")
-  if [ -z "$host" ] && [ -f "$PROJECT/.env" ]; then host=$(sed -n 's/^PK_HOST=//p' "$PROJECT/.env" | tail -n1); fi
+  if [ -z "$host" ] && [ -f "$PROJECT/.env" ]; then
+    host=$(sed -n 's/^PK_HOST=//p' "$PROJECT/.env" | tail -n1)
+    if [[ $host =~ ^[0-9]+(\.[0-9]+){3}$ ]] && ! device_addresses | grep -qxF "$host"; then host=; fi
+  fi
   if [ -z "$host" ]; then host=$(device_addresses | head -n1); fi
   if [ -z "$(setting "$dir" MQTT_URL)" ]; then profiles=local-mqtt; fi
   if [ -f "$dir/config/compose.override.yaml" ]; then files=$files:config/compose.override.yaml; fi
   {
     echo "# Written by percept-kit deploy from the device's facts and config/percept.env."
-    echo "# Change config/percept.env on your PC and deploy, rather than this file."
+    echo "# Change config/percept.env through Device Settings or the PC kit, rather than this file."
     echo "PK_HOST=$host"
     echo "PK_ALLOWED_HOSTS=$(allowed_hosts "$host")"
     echo "PK_AUDIO_GID=$(getent group audio | cut -d: -f3)"
@@ -248,6 +260,75 @@ write_env() {
     chown "$owner" "$dir/.env.d/$m.env"
     chmod 600 "$dir/.env.d/$m.env"
   done
+}
+
+# HDMI_MODE: console is the text login on tty1; camera is percept-camera.service (mpv on tty7), whose
+# ExecStopPost gives the monitor back to tty1.
+apply_display() {
+  case $(setting "$PROJECT" HDMI_MODE) in
+    ''|console) systemctl -q disable --now percept-camera.service 2> /dev/null || true ;;
+    camera)
+      systemctl -q enable percept-camera.service
+      systemctl restart percept-camera.service ;;
+    *) die "HDMI_MODE must be console or camera" ;;
+  esac
+}
+
+# The Device Settings service (port 8002) and the HDMI camera player, from services/settings.
+install_settings() {
+  local f
+  install -d "$LIB/settings" /etc/percept-kit /var/lib/percept-kit
+  for f in server.py configuration.py index.html app.js style.css; do
+    install -m 644 "$PROJECT/services/settings/$f" "$LIB/settings/$f"
+  done
+  install -m 755 "$PROJECT/scripts/stack.sh" "$LIB/stack.sh"
+  echo "PK_PROJECT=$PROJECT" > /etc/percept-kit/settings.conf
+  for f in percept-settings.service percept-camera.service; do
+    install -m 644 "$PROJECT/scripts/host/$f" "/etc/systemd/system/$f"
+  done
+  systemctl daemon-reload
+  systemctl -q enable percept-settings.service
+  systemctl restart percept-settings.service
+  apply_display
+}
+
+# configure KEY...: applies settings changed in Device Settings. Recreates only the containers those
+# settings belong to: no build, no prune, nothing else restarted.
+configure() {
+  local key svc targets='' active mqtt=0 display=0 list=()
+  write_env "$PROJECT"
+  docker compose config -q
+  for key in "$@"; do
+    case $key in
+      EYE_*) targets="$targets eye" ;;
+      EAR_*) targets="$targets ear" ;;
+      MOUTH_*) targets="$targets mouth" ;;
+      VOICE_*) targets="$targets voice" ;;
+      MQTT_*) targets="$targets eye voice"; [ "$key" != MQTT_URL ] || mqtt=1 ;;
+      PROMETHEUS_*) targets="$targets prometheus" ;;
+      HDMI_*) display=1 ;;
+      # Homepage and go2rtc are given the device's address and names.
+      SYSTEM_HOSTNAME|SYSTEM_NETWORK) targets="$targets homepage go2rtc" ;;
+      PIP_INDEX_URL) log "PIP_INDEX_URL is used the next time an image is built" ;;
+      *) die "unknown setting: $key" ;;
+    esac
+  done
+  if [ "$mqtt" = 1 ]; then
+    if [ -z "$(setting "$PROJECT" MQTT_URL)" ]; then
+      docker compose up -d --no-build --no-deps mosquitto
+    else
+      docker compose --profile '*' rm -sf mosquitto
+    fi
+  fi
+  if [ -n "$targets" ]; then
+    targets=$(tr ' ' '\n' <<< "$targets" | sed '/^$/d' | sort -u)
+    # Compose starts a turned-off service if it's named on the command line: name only the ones on.
+    active=$(docker compose config --services | sort)
+    for svc in $(comm -23 <(echo "$targets") <(echo "$active")); do log "$svc is turned off: not started"; done
+    read -r -a list <<< "$(comm -12 <(echo "$targets") <(echo "$active") | tr '\n' ' ')"
+    if [ "${#list[@]}" -gt 0 ]; then docker compose up -d --no-build --no-deps "${list[@]}"; fi
+  fi
+  if [ "$display" = 1 ]; then apply_display; fi
 }
 
 # The network and volumes compose.yaml declares external: kept outside the project.
@@ -356,6 +437,7 @@ remove_old_pins() {
 apply() {
   local svc ctx img hash builds=() missing='' need inactive stale active
   [ -f "$INCOMING/compose.yaml" ] || die "nothing uploaded to $INCOMING"
+  python3 "$GUARD" verify "$PROJECT" "$INCOMING/.config-generation"
   host_setup
   # The upload's configuration must load before anything changes.
   write_env "$INCOMING"
@@ -403,7 +485,9 @@ apply() {
     # shellcheck disable=SC2086
     docker compose restart $stale
   fi
+  install_settings
   rm -f "$BASELINE"
+  rm -f "$PROJECT/.settings-config-dirty"
 
   docker image prune -f > /dev/null
   # Anonymous volumes of replaced containers (the label keeps named volumes out, on any Docker version).
@@ -454,6 +538,12 @@ run_checks() {
   local h=$1 svc
   ROWS=() FAILS=0
   check homepage "Home page" "http://$h/" http_ok -H "Host: $h" http://127.0.0.1/
+  if http_ok http://127.0.0.1:8002/health; then
+    ROWS+=("Device Settings|ok|http://$h:8002/")
+  else
+    ROWS+=("Device Settings|failed|http://$h:8002/")
+    FAILS=$((FAILS + 1))
+  fi
   check grafana "Grafana" "http://$h:3000/" http_ok http://127.0.0.1:3000/api/health
   check go2rtc "Video" "http://$h:1984/" http_ok http://127.0.0.1:1984/api
   check eye "Eye" "http://$h:8555/  rtsp://$h:8554/result" http_ok http://127.0.0.1:8555/
@@ -514,12 +604,20 @@ status() {
 
 cmd=${1:-status}; shift || true
 case $cmd in
+  stage|receive|plan|apply|configure)
+    if [ "${PK_CONTROL_LOCKED:-}" != 1 ]; then
+      exec 9>"$PROJECT/.control.lock"
+      flock -n 9 || die "another deployment or settings operation is running"
+    fi ;;
+esac
+case $cmd in
   stage) stage ;;
   receive) receive ;;
   plan) plan ;;
   apply) apply ;;
+  configure) configure "$@" ;;
   rebuild) rebuild "$@" ;;
   health) health "${1:-0}" ;;
   status) status ;;
-  *) die "usage: stack.sh stage | receive | plan | apply | rebuild <service> | health [SECONDS] | status" ;;
+  *) die "usage: stack.sh stage | receive | plan | apply | configure <KEY...> | rebuild <service> | health [SECONDS] | status" ;;
 esac

@@ -21,6 +21,6 @@ layout:
   Modules:
     style: row
     columns: 4
-  Monitoring:
+  Tools:
     style: row
-    columns: 3
+    columns: 4

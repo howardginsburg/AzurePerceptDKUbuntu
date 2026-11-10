@@ -481,7 +481,7 @@ check_names() {
 # config/ when there is one. Only files the device doesn't already have are sent; stack.sh on the
 # device puts it all in place.
 upload_stack() {
-  local items=(compose.yaml modules samples services) files list n
+  local items=(compose.yaml modules samples services config.example) files list n
   if [ -d "$ROOT/config" ]; then items+=(config); fi
   files=$(mktemp) list=$(mktemp)
   (cd "$ROOT" && find "${items[@]}" -type f ! -path '*/__pycache__/*' ! -name '*.pyc') > "$files"
@@ -566,6 +566,29 @@ cmd_compose() {
   [ $# -gt 0 ] || die "usage: $0 compose <docker compose arguments>   (e.g. $0 compose ps)"
   ssh -t -i "$KEY" "${SSH_OPTS[@]}" -o BatchMode=yes "$DEVUSER@$HOST" \
     "cd ~/percept-kit && sudo -n docker compose $(printf '%q ' "$@")"
+}
+
+cmd_settings() {
+  need_conf; load_state; require_ubuntu settings
+  local action=${1:-status} tmp backup
+  case $action in
+    status)
+      dssh 'sudo -n systemctl show -p Id -p ActiveState -p SubState percept-settings.service percept-camera.service' ;;
+    pull)
+      confirm "Retrieve device settings? Your current config/ will be moved into backups/ first. Nothing on the device is changed."
+      tmp=$(mktemp -d)
+      if ! dssh 'cd ~/percept-kit && test -d config &&
+        sudo -n tar -cf - --exclude=".upload-*" --exclude=".settings-*" config' | tar -C "$tmp" -xf - --no-same-owner; then
+        rm -rf "$tmp"; die "could not retrieve the device settings"
+      fi
+      mkdir -p "$BACKUPS"
+      backup=$BACKUPS/config-$(date -u +%Y%m%dT%H%M%SZ)-$$
+      if [ -d "$ROOT/config" ]; then mv "$ROOT/config" "$backup"; log "Previous PC config: $backup"; fi
+      mv "$tmp/config" "$ROOT/config"
+      rmdir "$tmp"
+      log "Device settings retrieved. Merge any PC edits from the backup, then deploy." ;;
+    *) die "usage: $0 settings status | pull" ;;
+  esac
 }
 
 BT=/usr/local/lib/percept-kit/bt.sh
@@ -661,6 +684,8 @@ Day to day (Ubuntu)
   bt <cmd>                   Bluetooth speaker: scan [seconds] | pair <MAC> | connect <MAC> |
                              disconnect <MAC> | forget <MAC> | status
   eye-base <cmd>             the Eye's build base (1.2 GB): status | save | remove | restore
+  settings <cmd>             Device Settings (http://<ip>:8002/): status | pull (copy the device's
+                             config/ to this PC, after changes made on the page)
 
 Boot, backup and restore
   assess                     hardware and software report, saved under reports/
@@ -693,6 +718,7 @@ main() {
     rebuild) cmd_rebuild "$@" ;;
     compose) cmd_compose "$@" ;;
     bt) cmd_bt "$@" ;;
+    settings) cmd_settings "$@" ;;
     eye-base) cmd_eye_base "$@" ;;
     restore) cmd_restore "$@" ;;
     disconnect) cmd_disconnect "$@" ;;

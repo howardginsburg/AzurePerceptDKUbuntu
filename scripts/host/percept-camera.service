@@ -1,0 +1,28 @@
+[Unit]
+Description=Percept camera on HDMI (mpv on tty7)
+After=network.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/percept-kit/settings.conf
+ExecStart=/usr/bin/python3 /usr/local/lib/percept-kit/settings/server.py --project ${PK_PROJECT} --camera
+# Give the monitor back to the console whenever the player stops.
+ExecStopPost=-/usr/bin/chvt 1
+# tty7 is past logind's automatic logins (tty1-6), so no getty competes for it. mpv uses it to give
+# the screen back on Ctrl+Alt+F1 and take it again on Ctrl+Alt+F7.
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty7
+TTYReset=yes
+TTYVHangup=yes
+# The player restarts mpv itself. Status 3: HDMI mode is console, or the video output failed (the
+# reason is on the Settings page); trying again wouldn't help.
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=3
+RestartPreventExitStatus=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

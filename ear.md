@@ -79,7 +79,7 @@ Several listeners can stream at the same time. One `arecord` process feeds them 
   - `arecord` lives in the container; the Ubuntu host doesn't need `alsa-utils`.
 - On the host, Ubuntu has a udev rule plus `percept-ear-audio.service`. The Ear re-enumerates
   late in boot, and the sound driver can miss it; the service reloads `snd-usb-audio` if no
-  "Azure Ear SoM" card appeared. See [README.md](README.md#5-the-ubuntu-root-filesystem).
+  "Azure Ear SoM" card appeared. See [PROVENANCE.md](PROVENANCE.md#microphones-and-buttons-the-ear-som).
 
 ## How it runs
 

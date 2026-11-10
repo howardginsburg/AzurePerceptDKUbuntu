@@ -1,6 +1,10 @@
 # Customize the device
 
-Every change is made on your PC and applied with one command:
+There are two ways to change things, and both change the same settings file:
+
+- **In a browser**, on the device's Device Settings page: see
+  [Change settings on the device](#change-settings-on-the-device).
+- **On your PC**, in `config/`, applied with one command:
 
 ```bash
 ./percept-kit.sh deploy
@@ -14,6 +18,38 @@ Every change is made on your PC and applied with one command:
 
 If the new configuration doesn't load, `deploy` stops with Compose's message and the running stack
 is left as it was.
+
+## Change settings on the device
+
+Open `http://<ip>:8002/`, or the **Settings** card on the home page.
+
+![Device Settings](docs/images/settings.png)
+
+| Tab | What it changes |
+|---|---|
+| HDMI display | Console or camera on the monitor ([below](#show-the-camera-on-the-hdmi-monitor)) |
+| Vision & camera | The model, its parser and labels, the video, the inference outputs |
+| Audio & Bluetooth | Speakers (scan, connect, disconnect, forget), and the mouth's and the Ear's settings |
+| Voice commands, MQTT, Monitoring | The voice sample, the broker, and how much metrics history Prometheus keeps |
+| Models & files | Uploads to `config/files/`. A file with the same name is replaced |
+| System | Start, stop or restart a container, and read its log; host name; network; reboot and shut down |
+
+- Every setting in `config/percept.env` is on the page, with its description and default. **Apply
+  changes** writes them to the device's `config/percept.env` and recreates only the containers they
+  belong to. Nothing is rebuilt. If Compose refuses the result, the previous settings are put back.
+- **Network**: after a change, the device checks that it can reach its gateway. If it can't within
+  about a minute, it puts the previous settings back. After a change of Wi-Fi network or address,
+  open the page at the device's new address.
+- Like the other pages, it has no sign-in: anyone on your network can use it.
+
+**Changes made on the page stop the next `deploy`**, which would otherwise replace them with your
+PC's `config/`. Copy them to your PC first:
+
+```bash
+./percept-kit.sh settings pull     # your PC's config/ moves to backups/config-<time>/
+```
+
+Then copy across any edits you'd made on the PC in the meantime, and deploy as usual.
 
 ## Your settings: `config/`
 
@@ -52,7 +88,8 @@ The Eye runs SSD MobileNet v2 (COCO, 90 classes) unless `EYE_MODEL` names anothe
    first, which takes about a minute.
 4. Check: the *Annotated* video on the home page draws the new model's labels, and
    `curl http://<ip>:8555/latest` returns its results. If the model doesn't load, the Eye falls back
-   to the default SSD and says why in `./percept-kit.sh logs eye`.
+   to the default SSD and says why in `./percept-kit.sh logs eye`. `EYE_STRICT_MODEL=1` makes it
+   stop instead, so a model that didn't load can't go unnoticed.
 
 Example, the ONNX SSD that comes with the Eye:
 
@@ -107,6 +144,112 @@ services:
     ports: ["1883:1883"]
 ```
 
+## Send the results to Azure IoT Hub
+
+IoT Hub speaks MQTT, so the Eye's own MQTT client (Eclipse Paho, no Azure SDK) can publish to it
+directly. Each message is the JSON that Microsoft's Eye module used to send to IoT Hub
+([eye.md](eye.md#inference-results-http-mqtt-stdout)), and the Eye already trusts Azure's root
+certificate (DigiCert Global Root G2).
+
+**Before you start:**
+- You need an IoT hub, and the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+  with its IoT extension (`az extension add --name azure-iot`).
+- The device must reach `<hub>.azure-devices.net` on TCP port 8883.
+- **The voice sample stops working.** IoT Hub isn't a general MQTT broker: it accepts only the
+  device itself, with the device ID as its client ID, and nothing can subscribe to the device's
+  messages. These settings also replace the device's own broker, which is where the voice sample
+  reads what the Eye sees. So the recipe switches the voice sample off.
+
+**Steps** (`<hub>` is your hub's name, `percept-dk` the device ID you choose):
+
+1. Create the device in the hub, and a SAS token that lets it send for a year. The token goes
+   alone on the first line of `config/files/iothub-sas`:
+
+   ```bash
+   az iot hub device-identity create --hub-name <hub> --device-id percept-dk
+   az iot hub generate-sas-token --hub-name <hub> --device-id percept-dk --duration 31536000 \
+     --query sas --output tsv > config/files/iothub-sas
+   ```
+
+2. In `config/percept.env`:
+
+   ```bash
+   MQTT_URL=mqtts://<hub>.azure-devices.net:8883
+   MQTT_USERNAME=<hub>.azure-devices.net/percept-dk/?api-version=2021-04-12
+   MQTT_PASSWORD_FILE=/config/files/iothub-sas
+   MQTT_EYE_TOPIC=devices/percept-dk/messages/events/
+   EYE_MQTT_CLIENT_ID=percept-dk
+   EYE_OUTPUT_INTERVAL_MS=15000
+   ```
+
+   And in `config/compose.override.yaml`, switch the voice sample off:
+
+   ```yaml
+   services:
+     voice:
+       profiles: [off]
+   ```
+
+3. `./percept-kit.sh deploy`. The device's own broker and the voice sample are removed, and the Eye
+   connects to IoT Hub.
+
+4. Check:
+   - `./percept-kit.sh logs eye` shows `MQTT: connected to mqtts://<hub>.azure-devices.net:8883`, or
+     why IoT Hub refused the connection (`bad user name or password`, `not authorized`);
+   - watch the messages arrive:
+     `az iot hub monitor-events --hub-name <hub> --device-id percept-dk --content-type application/json`.
+
+On the [Device Settings](#change-settings-on-the-device) page instead: upload `iothub-sas` under
+**Models & files**, set the same values (the first five are on the **MQTT** tab,
+`EYE_OUTPUT_INTERVAL_MS` on **Vision & camera**) and apply them, then stop the voice sample under
+**System**. Applying MQTT settings restarts the voice sample, so stop it afterwards. The page can't
+edit `compose.override.yaml`, so the voice sample stays stopped only until the next `deploy`
+([Turn a component off](#turn-a-component-off)); add the override from step 2 before then.
+
+**Things to know:**
+- **Stay within the hub's daily quota.** The Eye produces about 12 results a second, a million a
+  day, and `EYE_OUTPUT_INTERVAL_MS` sends at most one every N ms. The free tier allows 8,000
+  messages a day, counted in blocks of 0.5 KB; S1 and B1 allow 400,000 a day per unit
+  ([pricing](https://azure.microsoft.com/pricing/details/iot-hub/)). A result is about 140 bytes
+  with one object in view, and about 120 bytes more for each other object. So 15000 (5,760 a day)
+  suits the free tier, and 1000 (86,400 a day) one S1 unit. The interval applies to the HTTP and
+  stdout outputs too; the metrics still count every inference.
+- **The token is read when the Eye starts.** When it expires, IoT Hub disconnects the device, and the
+  Eye can't reconnect until it restarts with a new one. Before then, write a new token over the old
+  file (the second command of step 1) and `deploy`: the Eye restarts because a file it reads
+  changed. On the Device Settings page, upload the new file under **Models & files**, then restart
+  the Eye under **System**.
+- **QoS 0.** The Eye publishes each message once, without acknowledgement, which IoT Hub accepts.
+- **No content type.** The messages don't declare themselves as JSON, so IoT Hub's message routing
+  can't filter on their body; it can still route them by device ID or device twin. Readers told the
+  format read the JSON as usual: Stream Analytics with a JSON input, `monitor-events` with
+  `--content-type application/json` (without it, each message shows as one string).
+- **To undo**, remove the lines and the override, and deploy. The device's broker and the voice
+  sample come back.
+
+**With an X.509 certificate instead of a token.** Make a self-signed certificate, and create the
+device in the hub with its thumbprint instead of a key (the same thumbprint twice, since there's
+only one certificate):
+
+```bash
+# MSYS_NO_PATHCONV stops Git Bash turning /CN=... into a Windows path.
+MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 -nodes -days 730 -subj "/CN=percept-dk" \
+  -keyout config/files/percept-dk.key -out config/files/percept-dk.pem
+thumbprint=$(openssl x509 -in config/files/percept-dk.pem -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :)
+az iot hub device-identity create --hub-name <hub> --device-id percept-dk \
+  --auth-method x509_thumbprint --primary-thumbprint "$thumbprint" --secondary-thumbprint "$thumbprint"
+```
+
+Then, in `config/percept.env`, replace `MQTT_PASSWORD_FILE` with:
+
+```bash
+MQTT_CERT_FILE=/config/files/percept-dk.pem
+MQTT_KEY_FILE=/config/files/percept-dk.key
+```
+
+The certificate is valid for two years (`-days 730`). Microsoft's guide to X.509 authentication:
+[Authenticate identities with X.509 certificates](https://learn.microsoft.com/azure/iot-hub/authenticate-authorize-x509).
+
 ## Change the video or the inference outputs
 
 In `config/percept.env`:
@@ -120,6 +263,29 @@ In `config/percept.env`:
 | `EYE_STDOUT=1` | One JSON line per inference in `./percept-kit.sh logs eye` |
 
 The Prometheus metrics still count every inference. [eye.md](eye.md) has the details.
+
+## Show the camera on the HDMI monitor
+
+By default the monitor shows the text console. In `config/percept.env`, or on the Device Settings
+page's **HDMI display** tab:
+
+| Setting | Effect |
+|---|---|
+| `HDMI_MODE=camera` | The Eye's video full screen instead of the console. No desktop is installed: mpv draws straight to the display |
+| `HDMI_FEED` | `result` (detections drawn in, the default) or `raw`. Both are the 816×616 MJPEG streams |
+| `HDMI_OUTPUT_MODE` | `1280x720` (the default), `1024x768`, `720x576` or `640x480`: one your monitor supports. The monitor scales the picture to fill its screen |
+
+- **Why not 1080p.** mpv draws into frame buffers that the display driver takes from a small pool
+  of contiguous memory, and the GPU driver keeps most of it, though nothing uses the GPU. Two
+  1920×1080 frames don't fit in what's left; two 1280×720 ones do, once the player has freed the
+  page cache ([PROVENANCE.md](PROVENANCE.md#the-camera-on-hdmi)). The video is 816×616 anyway, so
+  720p loses nothing, and it costs less CPU, because mpv scales the video in software.
+- The video is on virtual terminal 7. With a USB keyboard, Ctrl+Alt+F1 shows the console and
+  Ctrl+Alt+F7 the video again. `HDMI_MODE=console` stops the player.
+- The player waits for a monitor and for the Eye, and plays again by itself when the Eye restarts.
+  If the video can't be shown on the monitor (a mode the monitor doesn't support, say), it gives the
+  monitor back to the console and the Device Settings page shows why. Choose another mode there.
+- `deploy` installs mpv for it: about 270 MB.
 
 ## Change the voice sample
 
@@ -242,11 +408,12 @@ rebuilds one from scratch, without Docker's cache, for example after a base imag
 ## Free up disk space
 
 Ubuntu's root partition, which also holds Docker, is 10.5 GB. With everything running and the
-Eye's build base kept, 3.5 GB of it is free.
+Eye's build base kept, about 3 GB of it is free.
 
 | What | Size | Notes |
 |---|---|---|
 | Ubuntu | 1.8 GB | Includes the system journal (capped at 200 MB) and apt's download cache (`sudo apt clean` empties it) |
+| mpv, for the HDMI camera | 270 MB | [Show the camera on the HDMI monitor](#show-the-camera-on-the-hdmi-monitor) |
 | The Eye's build base | 1.2 GB | Below |
 | Grafana's image | 1.4 GB | |
 | The other images | 1.9 GB | The voice sample 513 MB, the mouth 366 MB, the Eye 238 MB, the rest under 300 MB each |
@@ -289,6 +456,9 @@ How:
 need it, `./percept-kit.sh eye-base restore` loads it from the backup, or else downloads it.
 
 ## Change the address, Wi-Fi or host name
+
+All three can be changed on the Device Settings page (**System**), which also updates the home page.
+From your PC or a shell instead:
 
 - **The device's IP address changed.** The home page's links and the full-resolution video use the
   address the kit knows. Run `./percept-kit.sh connect <new-ip>`, then `./percept-kit.sh deploy`. A

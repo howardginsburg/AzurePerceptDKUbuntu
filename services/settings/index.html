@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Percept Device Settings</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><a id="home-link" href="/">Percept DK</a><h1>Device Settings</h1></div>
+    <div class="toolbar">
+      <span id="pending-count"></span>
+      <button id="reload" disabled>Reload</button>
+      <button id="apply" data-write disabled>Apply changes</button>
+    </div>
+  </header>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <main>
+    <aside>
+      <nav aria-label="Settings sections">
+        <button data-tab="display">HDMI display</button>
+        <button data-tab="vision">Vision &amp; camera</button>
+        <button data-tab="audio">Audio &amp; Bluetooth</button>
+        <button data-tab="voice">Voice commands</button>
+        <button data-tab="messaging">MQTT</button>
+        <button data-tab="monitoring">Monitoring</button>
+        <button data-tab="files">Models &amp; files</button>
+        <button data-tab="system">System</button>
+      </nav>
+      <p id="device-summary" class="muted"></p>
+      <p id="sync-state" class="muted"></p>
+    </aside>
+    <div class="content">
+      <section id="display" class="tab">
+        <div class="section-title"><span class="eyebrow">LOCAL OUTPUT</span><h2>HDMI display</h2></div>
+        <div class="card">
+          <h3>Console or camera</h3>
+          <p><b>Console</b> is the text login on the monitor, as before. <b>Camera</b> plays the Eye's video full screen,
+            with no desktop. Everything else keeps running in both modes.</p>
+          <p id="display-state" class="status-line"></p>
+          <p class="muted">In camera mode, Ctrl+Alt+F1 on a USB keyboard shows the console and Ctrl+Alt+F7 the camera again.
+            If the video can't be shown, the console comes back and the reason appears above.</p>
+        </div>
+        <div data-settings-section="HDMI display"></div>
+      </section>
+
+      <section id="vision" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">EYE</span><h2>Vision &amp; camera</h2></div>
+        <div class="card">
+          <h3>Models</h3>
+          <p>Upload a model under <a href="#files">Models &amp; files</a>, then pick it in <b>Model</b>. An XML model needs
+            its BIN file beside it. The model must suit the Myriad X (OpenVINO); see eye.md for the formats and parsers.</p>
+          <p class="muted">The video stops for up to a minute while the Eye loads a model. If a model doesn't load, the Eye
+            uses the default SSD instead, unless <b>Strict model</b> is 1. Its log is under System.</p>
+        </div>
+        <div data-settings-section="Eye: model and video"></div>
+        <div data-settings-section="Eye: inference outputs"></div>
+      </section>
+
+      <section id="audio" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">EAR &amp; MOUTH</span><h2>Audio &amp; Bluetooth</h2></div>
+        <div class="card">
+          <div class="row"><h3>Bluetooth speakers</h3>
+            <div class="toolbar"><button id="bt-refresh">Refresh</button><button id="bt-scan" data-write>Scan (12 s)</button></div>
+          </div>
+          <p id="audio-status" class="muted"></p>
+          <div id="bt-devices" class="table-wrap"></div>
+          <p class="muted">Put the speaker in pairing mode, scan, then Connect. Pairing takes up to a minute.</p>
+        </div>
+        <div data-settings-section="mouth (speaker and Bluetooth)"></div>
+        <div data-settings-section="Ear"></div>
+      </section>
+
+      <section id="voice" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">VOICE SAMPLE</span><h2>Voice commands</h2></div>
+        <div data-settings-section="voice sample"></div>
+      </section>
+
+      <section id="messaging" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">INFERENCES</span><h2>MQTT</h2></div>
+        <div class="card"><p>The Eye and the voice sample share these. Leave the URL empty for the device's own broker.
+          Upload password and certificate files under <a href="#files">Models &amp; files</a>.</p></div>
+        <div data-settings-section="MQTT (the Eye and the voice sample)"></div>
+      </section>
+
+      <section id="monitoring" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">GRAFANA &amp; PROMETHEUS</span><h2>Monitoring</h2></div>
+        <div class="card"><p>How much metrics history Prometheus keeps. The eMMC is small: leave room for image updates.</p></div>
+        <div data-settings-section="dashboard"></div>
+      </section>
+
+      <section id="files" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">CONFIG/FILES</span><h2>Models &amp; files</h2></div>
+        <div class="card">
+          <h3>Upload</h3>
+          <p>Models, label files, broker passwords and certificates. The containers see them as
+            <code>/config/files/&lt;name&gt;</code>. A file with the same name is replaced.</p>
+          <form id="upload-form"><input id="uploads" type="file" multiple required><button data-write type="submit">Upload</button></form>
+          <div id="file-list" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="system" class="tab" hidden>
+        <div class="section-title"><span class="eyebrow">DEVICE</span><h2>System</h2></div>
+        <div class="card">
+          <div class="row"><h3>Containers</h3><button id="services-refresh">Refresh</button></div>
+          <p class="muted">A stop lasts until the next start, reboot or deploy.</p>
+          <div id="service-list" class="table-wrap"></div>
+          <pre id="service-logs" hidden></pre>
+        </div>
+        <div class="card">
+          <h3>Host name</h3>
+          <form id="hostname-form" class="inline-form">
+            <input id="hostname" aria-label="Host name" required maxlength="63" pattern="[a-z0-9][a-z0-9\-]*">
+            <button type="submit" data-write>Rename</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Network</h3>
+          <div id="interface-list"></div>
+          <p class="muted">After a change the device checks that it can reach the gateway. If it can't within about a minute,
+            it puts the previous settings back. If the address changes, open this page at the new one.</p>
+          <form id="network-form">
+            <div class="grid">
+              <label>Interface<select id="net-interface" required></select></label>
+              <label>Address<select id="net-mode"><option value="dhcp">Automatic (DHCP)</option><option value="static">Static IPv4</option></select></label>
+            </div>
+            <div id="net-static" class="grid" hidden>
+              <label>IPv4 address / prefix<input id="net-address" placeholder="192.168.1.50/24"></label>
+              <label>Gateway<input id="net-gateway" placeholder="192.168.1.1"></label>
+              <label>DNS servers<input id="net-dns" placeholder="192.168.1.1 1.1.1.1"></label>
+            </div>
+            <div id="net-wifi" class="grid" hidden>
+              <label>Wi-Fi network (SSID)<input id="net-ssid" maxlength="32" autocomplete="off" placeholder="Leave empty to keep the current one"></label>
+              <label>Password (WPA2)<input id="net-password" type="password" autocomplete="new-password" maxlength="63"></label>
+            </div>
+            <button type="submit" data-write>Apply network settings</button>
+          </form>
+        </div>
+        <div data-settings-section="building the images"></div>
+        <div class="card">
+          <h3>Power</h3>
+          <p class="muted">Both stop the whole demo. After a shutdown, unplug and replug the power to start it again.</p>
+          <div class="toolbar"><button id="reboot" data-write>Reboot</button><button id="shutdown" class="danger" data-write>Shut down</button></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

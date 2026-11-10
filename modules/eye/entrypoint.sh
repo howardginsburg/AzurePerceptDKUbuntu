@@ -15,4 +15,5 @@ if [ -n "${EYE_LABELS:-}" ]; then args+=("-l=$EYE_LABELS"); fi
 if [ -n "${EYE_RESOLUTION:-}" ]; then args+=("-s=$EYE_RESOLUTION"); fi
 if [ -n "${EYE_FPS:-}" ]; then args+=("--fps=$EYE_FPS"); fi
 case ${EYE_TIME_ALIGN:-0} in 1|true|yes|on) args+=("-t") ;; esac
+case ${EYE_STRICT_MODEL:-0} in 1|true|yes|on) args+=("-q") ;; esac
 exec /app/inference "${args[@]}" "$@"

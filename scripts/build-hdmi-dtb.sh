@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build pe100-hdmi.dtb from Microsoft's pe100.dtb (read from the device's own ESP) by inserting
 # the i.MX8MQ DCSS display controller + HDMI TX nodes from hdmi-dcss-nodes.dtsi.
-# Needs dtc (Debian/Ubuntu: device-tree-compiler; Alpine: dtc). See PROVENANCE.md section 3.
+# Needs dtc (Debian/Ubuntu: device-tree-compiler; Alpine: dtc). See PROVENANCE.md, "HDMI: the console and the camera".
 #
 # Usage: build-hdmi-dtb.sh <pe100.dtb> <out.dtb>
 set -eu

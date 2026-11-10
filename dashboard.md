@@ -27,12 +27,13 @@ The page at `http://<ip>/` has four groups of cards, then bookmarks:
 | Device | **Board**: CPU, memory, disk and SoC temperature. **Myriad X**: temperature, inferences per second, objects in view. **Containers**: how many run, and how long the device has been up. These three open Grafana. **Bluetooth speaker**: where sound plays now; it opens the mouth page's Bluetooth section to pair a speaker ([setup.md](setup.md#3-pair-a-bluetooth-speaker)) |
 | Video | The Eye's annotated, raw and full-resolution streams, and all three side by side ([Video](#video)) |
 | Modules | The Eye's API, the [Ear](ear.md), the [mouth](mouth.md) and the [voice sample](samples/voice/README.md), each with a dot that turns red when it doesn't answer |
-| Monitoring | Grafana, Prometheus (with its scrape targets up and down) and go2rtc |
+| Tools | **Settings**: opens Device Settings ([customize.md](customize.md#change-settings-on-the-device)). Grafana, Prometheus (with its scrape targets up and down) and go2rtc |
 | Bookmarks | The Eye's `/latest`, `/events` and `/metrics`; the three `rtsp://` URLs (they open in VLC if it's registered for `rtsp://`); Prometheus' targets, recording rules and query pages |
 
 The numbers come from Prometheus, and the speaker from the mouth's `/status`. Homepage fetches them
 itself, every 15 s, by container name on the Docker network `percept`, and checks each module the
-same way for its dot.
+same way for its dot. Device Settings runs on the host, outside Docker, so its dot is checked at the
+device's address.
 
 ## Grafana
 
@@ -158,6 +159,8 @@ board's 4 cores, and 2.2 GB of disk plus the stored metrics.
 
 - Homepage, Prometheus, go2rtc and node_exporter (port 9100) have no authentication, like the
   modules. Keep the device on a trusted network.
+- Device Settings (port 8002) has no sign-in either: anyone who can reach it can change settings,
+  the network and the host name, and reboot or shut down the device.
 - Grafana has no sign-in by design: anyone who can reach port 3000 can change dashboards, data
   sources and settings. Its own login is switched off, so a default `admin`/`admin` account can't be
   used either, from the page or the API.

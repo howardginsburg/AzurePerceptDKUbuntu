@@ -54,7 +54,7 @@ and the Myriad X's temperatures and memory ([Prometheus metrics](#prometheus-met
 The result is about 240 MB. It runs as `apdk_app` (uid 5001, gid 5000 = `apdk_accessories`,
 the group the host udev rules give access to the Eye). The image contains binaries from
 Microsoft's base image: build it on your device and never push it to a registry. Where every
-part came from is in [PROVENANCE.md](PROVENANCE.md#7-eye-app-source-moduleseyeapp).
+part came from is in [PROVENANCE.md](PROVENANCE.md#vision-the-eye-som).
 
 **The build base stays on the device.** Every build of the Eye needs it, so the kit keeps it in
 Docker after the build. Every stock Percept DK has this exact image in its IoT Edge cache, and
@@ -98,20 +98,21 @@ Eye sees as `/config/files/`.
 The parsers are `ssd100` (the default), `ssd200`, `yolo`, `classification`, `s1`, `openpose`,
 `onnxssd`, `faster-rcnn-resnet50`, `unet` and `ocr`. Models from the Azure Percept model zoo and
 Custom Vision "Vision AI Dev Kit" exports are of these kinds. If a model fails to load, the app
-falls back to the default SSD and logs why.
+falls back to the default SSD and logs why; `EYE_STRICT_MODEL=1` makes it exit instead.
 
 The app has a few options with no setting. Give them as the service's `command` in
 `config/compose.override.yaml`; they're added after the ones the settings produce:
 
 | Option | Meaning |
 |---|---|
-| `-q` | Exit on a model error instead of falling back to the default SSD |
 | `-i=uvc` | Use a USB webcam (`/dev/video0`) instead of the Eye's camera; also add `devices: ["/dev/video0"]` |
 | `--h264_out=<file>` | Also write the raw H.264 stream to a file in the container |
 
 ## Inference results (HTTP, MQTT, stdout)
 
-Every inference produces one JSON message, in the format the app used to send to IoT Hub. This
+Every inference produces one JSON message, in the format the app used to send to IoT Hub, and the
+MQTT output can still send it to Azure IoT Hub
+([customize.md](customize.md#send-the-results-to-azure-iot-hub)). This
 message was captured from `GET /latest` on the device with the default SSD model, with one
 person in view:
 
@@ -261,6 +262,7 @@ How it works:
 - The Azure Percept "secure AI" (encrypted model) path is compiled in but needs Azure; it isn't
   used here.
 - The app's Azure IoT client is still compiled in. With no IoT Edge it only logs connection
-  errors; nothing is sent to Azure.
+  errors and sends nothing; results reach Azure IoT Hub through the MQTT output instead
+  ([customize.md](customize.md#send-the-results-to-azure-iot-hub)).
 - MQTT is QoS 0, MQTT 3.1.1. HTTP and RTSP have no TLS or authentication: keep the device on a
   trusted network.

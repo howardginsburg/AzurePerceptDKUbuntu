@@ -4,7 +4,7 @@ One command takes an Azure Percept DK that runs its stock software to Ubuntu 22.
 running: the Eye, Ear and mouth modules, the MQTT broker, the voice sample, and the home page with
 the dashboards and video. You can go back to the stock software at any time.
 
-- [README.md](README.md) explains what each step does under the hood.
+- [ARCHITECTURE.md](ARCHITECTURE.md) explains what each step does under the hood.
 - [customize.md](customize.md) covers changing things afterwards: a new model, your own MQTT
   broker, your own containers.
 
@@ -82,6 +82,7 @@ It ends with every component's state and address:
 ==> Checking every component
 Component           State   Address
 Home page           ok      http://<ip>/
+Device Settings     ok      http://<ip>:8002/
 Grafana             ok      http://<ip>:3000/
 Video               ok      http://<ip>:1984/
 Eye                 ok      http://<ip>:8555/  rtsp://<ip>:8554/result
@@ -149,6 +150,8 @@ Open `http://<ip>/`. Every page on the device is linked from there, with live nu
   `http://<ip>:8080/` ([samples/voice/README.md](samples/voice/README.md)).
 - Log in as before: `ssh <user>@<ip>`, with the same user, password, SSH key and host key as on
   Mariner. The HDMI port shows a Linux console, and a USB keyboard works for local login.
+- Change settings in a browser at `http://<ip>:8002/`, including showing the Eye's video on the
+  HDMI monitor instead of the console ([customize.md](customize.md#change-settings-on-the-device)).
 
 ## Day to day
 
@@ -156,6 +159,7 @@ Open `http://<ip>/`. Every page on the device is linked from there, with live nu
 |---|---|
 | Every component's state and address | `./percept-kit.sh status` |
 | Apply changes from your PC | `./percept-kit.sh deploy`; see [customize.md](customize.md) |
+| Change settings in a browser | `http://<ip>:8002/`; then, before the next deploy, `./percept-kit.sh settings pull` ([customize.md](customize.md#change-settings-on-the-device)) |
 | Recent log lines | `./percept-kit.sh logs [service] [lines]` |
 | Restart, stop or start a component | `./percept-kit.sh restart|stop|start <service>` |
 | Rebuild an image from scratch | `./percept-kit.sh rebuild eye|ear|mouth|voice` |

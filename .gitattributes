@@ -15,6 +15,7 @@ Dockerfile text eol=lf
 *.json text eol=lf
 *.css text eol=lf
 *.js text eol=lf
+*.html text eol=lf
 *.dtb binary
 *.zst binary
 *.onnx binary

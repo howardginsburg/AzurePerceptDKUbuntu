@@ -106,7 +106,7 @@ robotic. If the configured Piper voice is missing, mouth falls back to espeak-ng
 [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices). To use a different one, edit the
 `PIPER_VOICE*` build arguments in `modules/mouth/Dockerfile` (name, path, and the two SHA-256
 sums) and deploy: the mouth image is rebuilt. Check the voice's `MODEL_CARD` first: several voices are trained on data with
-non-commercial or unclear licences (see [PROVENANCE.md](PROVENANCE.md#14-mouth-module-bluetooth-and-the-voice-sample)).
+non-commercial or unclear licences (see [PROVENANCE.md](PROVENANCE.md#sound-out-the-mouth-and-bluetooth)).
 
 ## How it works
 
@@ -123,7 +123,7 @@ non-commercial or unclear licences (see [PROVENANCE.md](PROVENANCE.md#14-mouth-m
   - sets `ControllerMode = bredr` in `/etc/bluetooth/main.conf`. The Percept's Mariner kernel
     (5.4) crashes in its Bluetooth LE background-scan code when discovery stops. Classic-only
     mode avoids that code, and A2DP speakers are classic Bluetooth anyway. See
-    [PROVENANCE.md](PROVENANCE.md#14-mouth-module-bluetooth-and-the-voice-sample).
+    [PROVENANCE.md](PROVENANCE.md#sound-out-the-mouth-and-bluetooth).
   - creates a host account `percept-mouth` (uid 5003, group `audio`). The system D-Bus checks a
     caller's uid against the *host's* users, and BlueALSA's D-Bus policy only admits group
     `audio`.
